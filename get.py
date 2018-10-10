@@ -147,5 +147,9 @@ def get_gitlab(url, coll):
 get_gitlab(gitlab_url,coll)
 get_source(source_url, coll, rest_url)
 #print collected data
+Fc = 0
 for doc in coll.find({}):
-    print(doc)
+	F = open(Fc +".md", "w")
+	F.write(doc)
+	F.close()
+	Fc+=1
