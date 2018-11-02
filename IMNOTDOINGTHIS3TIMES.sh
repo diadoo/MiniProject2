@@ -1,5 +1,5 @@
 GHUser=diadoo
-GHPass=Gra@#11345
+GHPass=
 
 rm myurls
 rm myrels
