@@ -5,27 +5,22 @@ import json
 import time
 import datetime
 import requests
-from bs4 import BeautifulSoup
 
 dbname = "fdac18mp2" #please use this database
 collname = "glprj_jpovlin" #please modify so you store data in your collection
-my_char = 'f'
-
 # beginning page index
-begin = "1"
+begin = "0"
 client = pymongo.MongoClient()
 
 db = client[dbname]
 coll = db[collname]
 
 
-gitlab_url = "https://gitlab.com/api/v4/projects?archived=false&membership=false&order_by=created_at&owned=false&page=" + begin + \
+beginurl = "https://gitlab.com/api/v4/projects?archived=false&membership=false&order_by=created_at&owned=false&page=" + begin + \
     "&per_page=99&simple=false&sort=desc&starred=false&statistics=false&with_custom_attributes=false&with_issues_enabled=false&with_merge_requests_enabled=false"
 
-gleft = 20
 
-source_url = "https://sourceforge.net/directory/?q=" + my_char + "&sort=name&page="
-rest_url = "https://sourceforge.net/rest/p/"
+gleft = 0
 
 header = {'per_page': 99}
 
@@ -39,49 +34,18 @@ def wait(left):
         time .sleep(60)
     return left
 
-def project_exists(url):
-    r = requests.get(url)
-    if r.status_code == 200:
-        return True
-    return False
-
-def get_source(url, coll, rest):
-    page = 1
-    project_count = 0
-    while True:
-        resp = requests.get(url + str(page))
-        text = resp.text
-        soup = BeautifulSoup(text, 'html.parser')
-        if re.search('No results found.', soup.get_text()):
-            return
-
-        for link in soup.find_all(class_="project-icon", href=True):
-            name = re.findall('/projects/([A-Za-z0-9\-]*)', link.get('href'))
-            name = name[0] if name else None
-            if name is not None and name.lower().startswith(my_char):
-                resp = requests.get(rest + name)
-                if resp.status_code == 200:
-                    info = json.loads(resp.text)
-                    info['forge'] = 'sourceforge'
-                    coll.insert_one(info)
-                    project_count += 1
-                    if project_count >= 50:
-                        return
-        page += 1
-    return
-
 # send queries and extract urls 
-def get_gitlab(url, coll):
-
+def get(url, coll):
+    print("starting get")
     global gleft
     global header
     global bginnum
     gleft = wait(gleft)
     values = []
     size = 0
-    project_count = 0
 
     try:
+        print("beginning loop")
         r = requests .get(url, headers=header)
         time .sleep(0.5)
         # got blocked
@@ -95,14 +59,8 @@ def get_gitlab(url, coll):
             array = json.loads(t)
             
             for el in array:
-                if el['name'].lower().startswith(my_char):
-                    if project_exists(el['http_url_to_repo']):
-                        project_count += 1
-                        el['forge'] = 'gitlab'
-                        coll.insert_one(el)
-                        if project_count >= 50:
-                            return
-            
+                coll.insert(el)
+ 
             #next page
             while ('; rel="next"' in lll):
                 gleft = int(r.headers.get('RateLimit-Remaining'))
@@ -121,20 +79,15 @@ def get_gitlab(url, coll):
                         t = r.text
                         array1 = json.loads(t)
                         for el in array1:
-                            if el['name'].lower().startswith(my_char):
-                                if project_exists(el['http_url_to_repo']):
-                                    project_count += 1
-                                    el['forge'] = 'gitlab'
-                                    coll.insert_one(el)
-                                    if project_count >= 50:
-                                        return
+                            coll.insert(el)
                     else:
                         sys.stderr.write("url can not found:\n" + url + '\n')
-                        return
+                        return 
                 except requests.exceptions.ConnectionError:
                     sys.stderr.write('could not get ' + url + '\n')
 
         else:
+            print("cannot find url")
             sys.stderr.write("url can not found:\n" + url + '\n')
             return
 
@@ -142,15 +95,6 @@ def get_gitlab(url, coll):
         sys.stderr.write('could not get ' + url + '\n')
     except Exception as e:
         sys.stderr.write(url + ';' + str(e) + '\n')
-
-#start retrieving
-get_gitlab(gitlab_url,coll)
-get_source(source_url, coll, rest_url)
-#print collected data
-#Fc = 0
-for doc in coll.find({}):
-	print(doc)
-#	F = open(Fc +".md", "w")
-#	F.write(doc)
-#	F.close()
-#	Fc+=1
+        
+#start retrieving        
+get(beginurl,coll)
